@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>pose.hand</title>
+    <!-- Scripts -->
+</head>
+
+<body>
+<div>Teachable Machine Pose Model</div>
+<button type="button" onclick="init()">Start</button>
+<div>
+    <canvas id="canvas"></canvas>
+</div>
+<div id="label-container"></div>
+<div id="indicator" style="height: 1rem; width: 1rem;"></div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+<script type="text/javascript">
+    const URL = "https://teachablemachine.withgoogle.com/models/OHLaVJuyF/";
+    let model, webcam, ctx, labelContainer, maxPredictions;
+
+    async function init() {
+        const modelURL = URL + "model.json"
+        const metadataURL = URL + "metadata.json"
+
+        model = await tmPose.load(modelURL, metadataURL)
+        maxPredictions = model.getTotalClasses()
+
+        const size = 200
+        const flip = true
+        webcam = new tmPose.Webcam(size, size, flip)
+        await webcam.setup()
+        await webcam.play()
+        window.requestAnimationFrame(loop)
+
+        const canvas = document.getElementById("canvas")
+        canvas.width = size
+        canvas.height = size
+        ctx = canvas.getContext("2d")
+        labelContainer = document.getElementById("label-container")
+        for (let i = 0; i < maxPredictions; i++) { // and class labels
+            labelContainer.appendChild(document.createElement("div"))
+        }
+    }
+
+    async function loop(timestamp) {
+        webcam.update(); // update the webcam frame
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const {pose, posenetOutput} = await model.estimatePose(webcam.canvas);
+        const prediction = await model.predict(posenetOutput);
+
+        for (let i = 0; i < maxPredictions; i++) {
+            const classPrediction =
+                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+        }
+
+        let pred = prediction[1].probability * 100;
+
+        if (pred >= 66) {
+            document.body.style.backgroundColor = "green";
+        } else if (pred >= 33) {
+            document.body.style.backgroundColor = "orange";
+        } else {
+            document.body.style.backgroundColor = "red";
+        }
+
+        drawPose(pose);
+    }
+
+    function drawPose(pose) {
+        if (webcam.canvas) {
+            ctx.drawImage(webcam.canvas, 0, 0);
+
+            if (pose) {
+                const minPartConfidence = 0.5;
+                tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+            }
+        }
+    }
+</script>
+
+</body>
+</html>
